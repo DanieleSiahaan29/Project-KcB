@@ -5,7 +5,7 @@ import LandingCard from './components/LandingCard'
 import RoutePanel from './components/RoutePanel'
 import NarasiPanel from './components/NarasiPanel'
 import { loadGraph } from './utils/graph'
-import { runBFS, runAStar, runHillClimbing } from './hooks/useAlgorithm'
+import { runBFS, runAStar, runBruteForce, runGreedy } from './hooks/useAlgorithm'
 import { generateNarasi, parseWaypoint } from './utils/api'
 import { findBestWaypoint, findLandmarkByName } from './utils/waypoint'
 
@@ -47,24 +47,26 @@ export default function PathfinderApp({ graph, initialStart, initialGoal, initia
 
     setTimeout(() => {
       const search = (s, g) => ({
-        bfs:   runBFS(graph.nodes, graph.adj, s, g),
-        astar: runAStar(graph.nodes, graph.adj, s, g),
-        hc:    runHillClimbing(graph.nodes, graph.adj, s, g),
+        bfs:        runBFS(graph.nodes, graph.adj, s, g),
+        astar:      runAStar(graph.nodes, graph.adj, s, g),
+        bruteforce: runBruteForce(graph.nodes, graph.adj, s, g),
+        greedy:     runGreedy(graph.nodes, graph.adj, s, g),
       })
 
-      let bfs, astar, hc
+      let bfs, astar, bruteforce, greedy
       if (wNode) {
         const r1 = search(sNode, wNode)
         const r2 = search(wNode, gNode)
-        bfs   = merge(r1.bfs,   r2.bfs)
-        astar = merge(r1.astar, r2.astar)
-        hc    = merge(r1.hc,   r2.hc)
+        bfs        = merge(r1.bfs,        r2.bfs)
+        astar      = merge(r1.astar,      r2.astar)
+        bruteforce = merge(r1.bruteforce, r2.bruteforce)
+        greedy     = merge(r1.greedy,     r2.greedy)
       } else {
         const r = search(sNode, gNode)
-        bfs = r.bfs; astar = r.astar; hc = r.hc
+        bfs = r.bfs; astar = r.astar; bruteforce = r.bruteforce; greedy = r.greedy
       }
 
-      setResults({ bfs, astar, hc, startNode: sNode, goalNode: gNode, waypointNode: wNode })
+      setResults({ bfs, astar, bruteforce, greedy, startNode: sNode, goalNode: gNode, waypointNode: wNode })
       setPhase('result')
       setIsRunning(false)
     }, 100)
@@ -180,9 +182,10 @@ export default function PathfinderApp({ graph, initialStart, initialGoal, initia
   }
 
   const activeConfig = [
-    { key:'bfs',   label:'BFS',           sub:'Uninformed Search', color:'#4F46E5' },
-    { key:'astar', label:'A*',            sub:'Informed Search',   color:'#0F9D58' },
-    { key:'hc',    label:'Hill Climbing', sub:'Local Search',      color:'#F4B400' },
+    { key:'bfs',        label:'BFS',         sub:'Uninformed Search', color:'#5B5FEF' },
+    { key:'astar',      label:'A*',           sub:'Informed Search',   color:'#10B981' },
+    { key:'bruteforce', label:'Brute Force',  sub:'Exhaustive Search', color:'#EF4444' },
+    { key:'greedy',     label:'Greedy',       sub:'Best-First Search', color:'#EC4899' },
   ].find(a => a.key === activeAlgo)
 
   const activeResult = results?.[activeAlgo]

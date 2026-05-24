@@ -63,19 +63,25 @@ const NARASI_STATIC = {
       return `Mengevaluasi titik potensial (Skor: ${step.fScore}). Menempuh ${step.gScore}m, estimasi sisa ${step.hScore}m ke tujuan. Ini jalur paling logis saat ini.`
     return `Algoritma terus mengeliminasi cabang yang menjauh dari tujuan. Dari ${step.expanded} titik, A* hanya fokus menelusuri rute yang paling menjanjikan.`
   },
-  hc: (step, idx, total) => {
-    if (step.type === 'stuck')
-      return `Pencarian menemui jalan buntu (Local Optima). Semua rute terdekat justru menjauh dari tujuan. Algoritma perlu mencoba dari sudut yang berbeda.`
+  bruteforce: (step, idx, total) => {
     if (step.type === 'found')
-      return `Tujuan ditemukan! Meski sempat menghadapi local optima, pendekatan agresif Hill Climbing akhirnya berhasil menemukan jalur ke tujuan.`
+      return `Selesai! Aku telah memeriksa setiap kemungkinan dan ini adalah jalur TERPENDEK yang bisa ada. Tidak ada yang lebih pendek dari ini, aku jamin.`
     if (idx === 0)
-      return `Hill Climbing langsung bergerak menuju tujuan. Pendekatannya sangat greedy: selalu pilih jalan yang tampak paling dekat ke tujuan saat ini.`
-    const pct = Math.round((idx / total) * 100)
-    if (pct < 40)
-      return `Bergerak maju, estimasi sisa jarak ${step.hScore || '?'}m ke tujuan. Hill Climbing memilih tetangga terdekat tanpa mempertimbangkan gambaran keseluruhan.`
-    if (pct < 80)
-      return `Sudah ${idx} langkah ditempuh. Setiap keputusan diambil hanya berdasarkan jarak ke tujuan saat ini — strategi cepat tapi berisiko menemui jalan buntu.`
-    return `Hampir selesai. Tinggal beberapa langkah lagi. Algoritma terus maju selama ada tetangga yang lebih dekat ke tujuan.`
+      return `Aku mulai dengan cara yang paling pasti: periksa semua kemungkinan path. Lambat? Iya. Tapi hasilnya 100% optimal dan tidak bisa dibantah.`
+    if (idx < total * 0.4)
+      return `Aku sedang menjelajahi semua cabang dengan backtracking. Sudah ${step.expanded} node diperiksa. Masih banyak yang harus kukunjungi.`
+    if (idx < total * 0.8)
+      return `Lebih dari separuh kemungkinan sudah kupeiksa. ${step.expanded} node sejauh ini. Melelahkan, tapi tidak ada jalan pintas untuk kesempurnaan.`
+    return `Hampir selesai memeriksa semua kemungkinan. Jawaban terbaik sudah hampir pasti.`
+  },
+  greedy: (step, idx, total) => {
+    if (step.type === 'found')
+      return `Sampai! Aku langsung menuju yang tampak paling dekat dan berhasil. Cepat dan efisien!`
+    if (idx === 0)
+      return `Strategiku sederhana: selalu pilih node yang terasa paling dekat ke tujuan. Tidak peduli berapa jauh sudah kutempuh, yang penting goal terasa makin dekat.`
+    if (step.hScore)
+      return `Node ini hanya ${step.hScore}m dari tujuan menurut estimasiku. Ini yang paling menjanjikan dari semua kandidat — aku pilih ini!`
+    return `Aku terus bergerak ke arah yang tampak paling dekat ke tujuan. Sudah ${step.expanded} langkah kutempuh.`
   },
 }
 
@@ -214,11 +220,7 @@ export default function NarasiPanel({ algo, result, config, narasiAI, narasiLoad
           <span style={{ fontSize: 11, color: '#6B7280', background: 'white', border: '1px solid #E5E7EB', borderRadius: 8, padding: '2px 8px', fontWeight: 500 }}>
             {config.sub}
           </span>
-          {result?.stuckNode && (
-            <span style={{ fontSize: 11, background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 20, padding: '2px 10px', fontWeight: 700 }}>
-              ⚠ Local Optima
-            </span>
-          )}
+          {/* Tidak ada Local Optima badge (Hill Climbing sudah dihapus) */}
           {narasiAI && aiParagraphs.length > 1 && (
             <span style={{ fontSize: 10, background: `${config.color}15`, color: config.color, borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
               Paragraf {activeParagraphIdx + 1} / {aiParagraphs.length}

@@ -11,7 +11,7 @@ import SharedSidebar from '../../components/SharedSidebar'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { loadGraph } from '../../utils/graph'
-import { runBFS, runAStar, runHillClimbing } from '../../hooks/useAlgorithm'
+import { runBFS, runAStar, runBruteForce, runGreedy } from '../../hooks/useAlgorithm'
 import { generateNarasi, parseWaypoint } from '../../utils/api'
 import { findBestWaypoint, findLandmarkByName, resolveWaypointFromParsed, getWaypointBadge, snapToGraph } from '../../utils/waypoint'
 import { useAppStore } from '../../stores/useAppStore'
@@ -114,9 +114,10 @@ const SkylineIllustration = () => (
 // NAV_ITEMS dipindah ke SharedSidebar
 
 const ALGO_CONFIG = [
-  { key:'bfs',   label:'BFS',           sub:'Uninformed', color:'#5B5FEF', bg:'#EEF2FF', border:'#C7D2FE', text:'#4338CA' },
-  { key:'astar', label:'A*',            sub:'Informed',   color:'#10B981', bg:'#F0FDF4', border:'#6EE7B7', text:'#065F46' },
-  { key:'hc',    label:'Hill Climbing', sub:'Local',      color:'#F59E0B', bg:'#FFFBEB', border:'#FCD34D', text:'#92400E' },
+  { key:'bfs',        label:'BFS',         sub:'Uninformed', color:'#5B5FEF', bg:'#EEF2FF', border:'#C7D2FE', text:'#4338CA' },
+  { key:'astar',      label:'A*',           sub:'Informed',   color:'#10B981', bg:'#F0FDF4', border:'#6EE7B7', text:'#065F46' },
+  { key:'bruteforce', label:'Brute Force',  sub:'Exhaustive', color:'#EF4444', bg:'#FEF2F2', border:'#FECACA', text:'#991B1B' },
+  { key:'greedy',     label:'Greedy',       sub:'Best-First', color:'#EC4899', bg:'#FDF2F8', border:'#F9A8D4', text:'#9D174D' },
 ]
 
 // Sidebar diganti SharedSidebar
@@ -124,12 +125,12 @@ const ALGO_CONFIG = [
 // ─────────────────────────────────────
 // MAP COMPONENT
 // ─────────────────────────────────────
-const COLORS = { bfs:'#5B5FEF', astar:'#10B981', hc:'#F59E0B' }
+const COLORS = { bfs:'#5B5FEF', astar:'#10B981', bruteforce:'#EF4444', greedy:'#EC4899' }
 
 function MapView({ graph, results, activeAlgo, activeStep, showHeatmap, mapRef, onNodeSelect, selectMode }) {
   const mapDivRef = useRef(null)
   const mapObj    = useRef(null)
-  const layersRef = useRef({ bfs:[], astar:[], hc:[], markers:[] })
+  const layersRef = useRef({ bfs:[], astar:[], bruteforce:[], greedy:[], markers:[] })
   const heatmapRef = useRef([])
   const activeMarkerRef = useRef(null)
   const cumulativeNodesRef = useRef([])
@@ -163,9 +164,9 @@ function MapView({ graph, results, activeAlgo, activeStep, showHeatmap, mapRef, 
   useEffect(() => {
     if (!mapObj.current || !graph || !results) return
     Object.values(layersRef.current).flat().forEach(l => { try { mapObj.current.removeLayer(l) } catch(e) {} })
-    layersRef.current = { bfs:[], astar:[], hc:[], markers:[] }
+    layersRef.current = { bfs:[], astar:[], bruteforce:[], greedy:[], markers:[] }
 
-    ;['bfs','astar','hc'].forEach(key => {
+    ;['bfs','astar','bruteforce','greedy'].forEach(key => {
       const res = results[key]
       if (!res) return
       const color = COLORS[key]
@@ -201,17 +202,7 @@ function MapView({ graph, results, activeAlgo, activeStep, showHeatmap, mapRef, 
         layersRef.current[key].push(line)
       }
 
-      if (key === 'hc' && res.stuckNode && (!activeAlgo || isActive)) {
-        const n = graph.nodes[res.stuckNode]
-        if (n) {
-          const stuck = L.circleMarker([n.lat, n.lng], {
-            radius: 10, color: '#EF4444', fillColor: '#EF4444',
-            fillOpacity: 0.3, weight: 2, dashArray: '4'
-          }).addTo(mapObj.current)
-          stuck.bindTooltip('⚠ Hill Climbing terjebak', { permanent: isActive, direction: 'top' })
-          layersRef.current[key].push(stuck)
-        }
-      }
+      // Sem stuck marker — Brute Force e Greedy não têm local optima
     })
 
     if (results.startNode) {
@@ -322,7 +313,8 @@ function MapView({ graph, results, activeAlgo, activeStep, showHeatmap, mapRef, 
         {[
           { color:'#5B5FEF', label:'BFS' },
           { color:'#10B981', label:'A*' },
-          { color:'#F59E0B', label:'Hill Climbing' },
+          { color:'#EF4444', label:'Brute Force' },
+          { color:'#EC4899', label:'Greedy' },
           { color:'#5B5FEF', label:'Titik A', dot:true },
           { color:'#EF4444', label:'Titik B', dot:true },
         ].map(({ color, label, dot }) => (
@@ -544,15 +536,33 @@ function NarasiPanelFixed({ algo, result, config, narasiAI, narasiLoading, onSte
       ]
       return { text: phrases[currentStep % phrases.length] }
     }
-    if (algo === 'hc') {
-      if (result?.stuckNode === step.current) return {
-        text: '"Sial! Aku terjebak. Ke mana pun aku melihat, semua jalan justru menjauh dari tujuan. Ini yang namanya local optima — perangkap tersembunyi yang paling menyebalkan."'
+    if (algo === 'bruteforce') {
+      if (step.type === 'found') return {
+        text: '"Selesai! Aku telah memeriksa setiap kemungkinan dan ini adalah jalur TERPENDEK yang bisa ada. Tidak ada yang lebih pendek dari ini, aku jamin."'
+      }
+      if (currentStep === 0) return {
+        text: '"Aku mulai dengan cara yang paling pasti: periksa semua kemungkinan path. Lambat? Iya. Tapi hasilnya 100% optimal dan tidak bisa dibantah."'
       }
       const phrases = [
-        '"Gas terus! Aku selalu pilih jalan yang rasanya paling dekat ke tujuan. Mungkin gegabah, tapi itu gayaku."',
-        '"Naluriku bilang maju ke sana. Aku tidak sempat memikirkan gambaran besar — yang penting setiap langkah terasa makin dekat."',
-        '"Energiku penuh! Aku terus bergerak tanpa berhenti. Semoga jalan ini tidak berakhir buntu..."',
-        '"Semakin dekat, semakin bersemangat! Inilah yang aku suka dari diriku — optimis sampai akhir."',
+        '"Aku sedang menjelajahi semua cabang dengan backtracking. Masih banyak yang harus kukunjungi."',
+        '"Lebih dari separuh kemungkinan sudah kupeiksa. Melelahkan, tapi tidak ada jalan pintas untuk kesempurnaan."',
+        '"Hampir selesai memeriksa semua kemungkinan. Jawaban terbaik sudah hampir pasti."',
+      ]
+      return { text: phrases[currentStep % phrases.length] }
+    }
+    if (algo === 'greedy') {
+      if (step.type === 'found') return {
+        text: '"Sampai! Aku langsung menuju yang tampak paling dekat dan berhasil. Cepat dan efisien!"'
+      }
+      if (currentStep === 0) return {
+        text: '"Strategiku sederhana: selalu pilih node yang terasa paling dekat ke tujuan. Tidak peduli berapa jauh sudah kutempuh, yang penting goal terasa makin dekat."'
+      }
+      if (step.hScore) return {
+        text: `"Node ini hanya ${step.hScore}m dari tujuan menurut estimasiku. Ini yang paling menjanjikan dari semua kandidat — aku pilih ini!"`
+      }
+      const phrases = [
+        '"Aku terus bergerak ke arah yang tampak paling dekat ke tujuan."',
+        '"Pilih yang tampak terbaik sekarang — itulah prinsipku!"',
       ]
       return { text: phrases[currentStep % phrases.length] }
     }
@@ -591,9 +601,7 @@ function NarasiPanelFixed({ algo, result, config, narasiAI, narasiLoading, onSte
           <div style={{ width:10, height:10, borderRadius:'50%', background:config.color, flexShrink:0 }} />
           <span style={{ fontSize:14, fontWeight:800, color:'#111827' }}>{config.label}</span>
           <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'#F3F4F6', color:'#6B7280', fontWeight:500 }}>{config.sub}</span>
-          {algo === 'hc' && result?.stuckNode && (
-            <span style={{ fontSize:10, padding:'2px 7px', borderRadius:20, background:'#FEF2F2', color:'#DC2626', fontWeight:700 }}>⚠ Local Optima</span>
-          )}
+          {/* Tidak ada Local Optima badge (Hill Climbing sudah dihapus) */}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:16 }}>
           {/* Stats compact */}
@@ -623,9 +631,7 @@ function NarasiPanelFixed({ algo, result, config, narasiAI, narasiLoading, onSte
         <span style={{ fontSize:11, color:'#9CA3AF', fontWeight:500, flexShrink:0 }}>
           Step {(step?.originalIndex ?? currentStep) + 1} / {totalOriginalSteps}
         </span>
-        {algo === 'hc' && result?.stuckNode && step?.current === result.stuckNode && (
-          <span style={{ fontSize:11, color:'#F59E0B', fontWeight:600, flexShrink:0 }}>· Percobaan ke-{(step?.attempt ?? 0) + 1}</span>
-        )}
+        {/* Tidak ada attempt counter untuk Brute Force / Greedy */}
         {/* Compact node stats — horizontal */}
         <div style={{ marginLeft:'auto', display:'flex', gap:12, alignItems:'center' }}>
           <span style={{ fontSize:11, color:'#6B7280' }}>Node: <b style={{ color:'#111827' }}>{step?.current ? step.current.slice(-4) : '—'}</b></span>
@@ -812,25 +818,29 @@ export default function CariRute({ graph: graphProp }) {
 
     setTimeout(() => {
       const search = (s, g) => ({
-        bfs:   runBFS(graph.nodes, graph.adj, s, g),
-        astar: runAStar(graph.nodes, graph.adj, s, g),
-        hc:    runHillClimbing(graph.nodes, graph.adj, s, g),
+        bfs:        runBFS(graph.nodes, graph.adj, s, g),
+        astar:      runAStar(graph.nodes, graph.adj, s, g),
+        bruteforce: runBruteForce(graph.nodes, graph.adj, s, g),
+        greedy:     runGreedy(graph.nodes, graph.adj, s, g),
       })
 
-      let bfs, astar, hc
+      let bfs, astar, bruteforce, greedy
       if (wNode) {
         const r1 = search(sNode, wNode), r2 = search(wNode, gNode)
-        bfs = merge(r1.bfs, r2.bfs); astar = merge(r1.astar, r2.astar); hc = merge(r1.hc, r2.hc)
+        bfs = merge(r1.bfs, r2.bfs)
+        astar = merge(r1.astar, r2.astar)
+        bruteforce = merge(r1.bruteforce, r2.bruteforce)
+        greedy = merge(r1.greedy, r2.greedy)
       } else {
         const r = search(sNode, gNode)
-        bfs = r.bfs; astar = r.astar; hc = r.hc
+        bfs = r.bfs; astar = r.astar; bruteforce = r.bruteforce; greedy = r.greedy
       }
 
-      const newResults = { bfs, astar, hc, startNode: sNode, goalNode: gNode, waypointNode: wNode }
+      const newResults = { bfs, astar, bruteforce, greedy, startNode: sNode, goalNode: gNode, waypointNode: wNode }
       setResults(newResults)
       setIsRunning(false)
 
-      const bestAlgo = [bfs, astar, hc].filter(r => r.cost).sort((a,b) => a.cost - b.cost)[0]
+      const bestAlgo = [bfs, astar, bruteforce, greedy].filter(r => r.cost).sort((a,b) => a.cost - b.cost)[0]
       addRiwayat({
         startLabel: sLabel || startLabel || sNode,
         goalLabel: gLabel || goalLabel || gNode,
@@ -933,8 +943,8 @@ export default function CariRute({ graph: graphProp }) {
   }, [graph, location.state, resolveWaypointAI])
 
   function merge(r1, r2) {
-    if (!r1?.path || !r2?.path) return { path: r1?.path || null, steps: [...(r1?.steps||[]), ...(r2?.steps||[])], expanded: (r1?.expanded||0)+(r2?.expanded||0), cost: r1?.cost||null, time: (r1?.time||0)+(r2?.time||0), stuckNode: r1?.stuckNode||r2?.stuckNode }
-    return { path: [...r1.path, ...r2.path.slice(1)], steps: [...r1.steps, ...r2.steps], expanded: r1.expanded+r2.expanded, cost: (r1.cost||0)+(r2.cost||0), time: r1.time+r2.time, stuckNode: r1.stuckNode||r2.stuckNode }
+    if (!r1?.path || !r2?.path) return { path: r1?.path || null, steps: [...(r1?.steps||[]), ...(r2?.steps||[])], expanded: (r1?.expanded||0)+(r2?.expanded||0), cost: r1?.cost||null, time: (r1?.time||0)+(r2?.time||0), stuckNode: null }
+    return { path: [...r1.path, ...r2.path.slice(1)], steps: [...r1.steps, ...r2.steps], expanded: r1.expanded+r2.expanded, cost: (r1.cost||0)+(r2.cost||0), time: r1.time+r2.time, stuckNode: null }
   }
 
   const handleAlgoClick = async (key) => {
@@ -1026,9 +1036,13 @@ export default function CariRute({ graph: graphProp }) {
   const activeConfig = ALGO_CONFIG.find(a => a.key === activeAlgo)
   const activeResult = results?.[activeAlgo]
 
-  const narasiConfig = activeConfig ? {
+    // UBAH: narasiConfig sub teks
+    const narasiConfig = activeConfig ? {
     ...activeConfig,
-    sub: activeConfig.key === 'bfs' ? 'Uninformed Search' : activeConfig.key === 'astar' ? 'Informed Search' : 'Local Search'
+    sub: activeConfig.key === 'bfs' ? 'Uninformed Search'
+       : activeConfig.key === 'astar' ? 'Informed Search'
+       : activeConfig.key === 'bruteforce' ? 'Exhaustive Search'
+       : 'Best-First Search'
   } : null
 
   return (
@@ -1252,7 +1266,7 @@ export default function CariRute({ graph: graphProp }) {
                     {ALGO_CONFIG.map(({ key, label, sub, color, bg, border, text }) => {
                       const r = results[key]
                       const isActive = activeAlgo === key
-                      const costs = [results.bfs?.cost, results.astar?.cost, results.hc?.cost].filter(Boolean)
+                      const costs = [results.bfs?.cost, results.astar?.cost, results.bruteforce?.cost, results.greedy?.cost].filter(Boolean)
                       const isBest = r?.cost && r.cost === Math.min(...costs)
 
                       return (
@@ -1273,7 +1287,7 @@ export default function CariRute({ graph: graphProp }) {
                               <span style={{ fontSize:12, fontWeight:700, color:'#111827' }}>{label}</span>
                               <span style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background: isActive ? 'rgba(255,255,255,0.7)' : '#ECECEC', color: isActive ? text : '#6B7280', fontWeight:500 }}>{sub}</span>
                               {isBest && <span style={{ fontSize:9, padding:'1px 6px', borderRadius:20, background:'#D1FAE5', color:'#065F46', fontWeight:700 }}>✓ Best</span>}
-                              {key === 'hc' && r?.stuckNode && <span style={{ fontSize:9, padding:'1px 6px', borderRadius:20, background:'#FEE2E2', color:'#991B1B', fontWeight:700 }}>Local Optima</span>}
+                              {/* Tidak ada Local Optima badge (Hill Climbing sudah dihapus) */}
                             </div>
                             <span style={{ fontSize:13, fontWeight:800, color: isActive ? color : '#374151' }}>
                               {r?.cost ? `${(r.cost/1000).toFixed(2)} km` : '—'}
@@ -1298,7 +1312,7 @@ export default function CariRute({ graph: graphProp }) {
                         {results.astar.cost <= (results.bfs?.cost || Infinity)
                           ? 'A* menemukan jalur optimal dengan eksplorasi paling efisien.'
                           : 'BFS menemukan jalur lebih pendek, A* lebih hemat node.'}
-                        {results.hc?.stuckNode ? ' Hill Climbing terjebak di local optima.' : ''}
+                        {' Brute Force menjamin jalur terpendek absolut namun paling lambat. Greedy cepat tapi tidak selalu optimal.'}
                       </p>
                     </div>
                   )}

@@ -240,9 +240,10 @@ const MapStatIcon = ({ size = 52 }) => (
 
 // ─── Constants ───────────────────────────────────────────
 const ALGO_INFO = [
-  { color: '#5B5FEF', bg: '#EEF2FF', label: 'BFS',           sub: 'Breadth First Search', desc: 'Mencari rute terpendek berdasarkan jumlah langkah' },
-  { color: '#10B981', bg: '#F0FDF4', label: 'A*',            sub: 'A Star',               desc: 'Algoritma cerdas dengan heuristik untuk rute optimal' },
-  { color: '#F59E0B', bg: '#FFFBEB', label: 'Hill Climbing', sub: 'Local Search',         desc: 'Mencari solusi optimal dengan pendekatan heuristik' },
+  { color: '#5B5FEF', bg: '#EEF2FF', label: 'BFS',         sub: 'Breadth First Search', desc: 'Mencari rute terpendek berdasarkan jumlah langkah' },
+  { color: '#10B981', bg: '#F0FDF4', label: 'A*',           sub: 'A Star',               desc: 'Algoritma cerdas dengan heuristik untuk rute optimal' },
+  { color: '#EF4444', bg: '#FEF2F2', label: 'Brute Force',  sub: 'Exhaustive Search',    desc: 'Memeriksa semua kemungkinan jalur untuk menemukan yang terpendek secara absolut' },
+  { color: '#EC4899', bg: '#FDF2F8', label: 'Greedy',       sub: 'Best-First Search',    desc: 'Selalu memilih node yang tampak paling dekat ke tujuan tanpa mempertimbangkan jarak tempuh' },
 ]
 
 // ─── LiveClock ────────────────────────────────────────────
@@ -329,7 +330,7 @@ function MiniMap() {
         background:'rgba(255,255,255,0.9)', backdropFilter:'blur(10px)', borderRadius:24, padding:'12px 20px',
         boxShadow:'0 4px 20px rgba(0,0,0,0.05)', border:'1px solid rgba(255,255,255,0.8)',
       }}>
-        {[ { color:'#5B5FEF', label:'BFS' }, { color:'#10B981', label:'A*' }, { color:'#F59E0B', label:'Hill Climbing' } ].map(({ color, label }) => (
+        {[ { color:'#5B5FEF', label:'BFS' }, { color:'#10B981', label:'A*' }, { color:'#EF4444', label:'Brute Force' }, { color:'#EC4899', label:'Greedy' } ].map(({ color, label }) => (
           <div key={label} style={{ display:'flex', alignItems:'center', gap:8 }}>
             <div style={{ width:12, height:12, borderRadius:'50%', background:color }} />
             <span style={{ fontSize:13, color:'#374151', fontWeight:600 }}>{label}</span>

@@ -4,9 +4,10 @@ import 'leaflet/dist/leaflet.css'
 import { nearestNode } from '../utils/graph'
 
 const COLORS = {
-  bfs:   '#1A73E8',
-  astar: '#0F9D58',
-  hc:    '#F4B400'
+  bfs:        '#5B5FEF',
+  astar:      '#10B981',
+  bruteforce: '#EF4444',
+  greedy:     '#EC4899'
 }
 
 export default function Map({
@@ -15,7 +16,7 @@ export default function Map({
 }) {
   const mapDivRef = useRef(null)
   const mapObj    = useRef(null)
-  const layersRef = useRef({ bfs: [], astar: [], hc: [], markers: [] })
+  const layersRef = useRef({ bfs: [], astar: [], bruteforce: [], greedy: [], markers: [] })
   const heatmapRef = useRef([])
   
   // ✅ Tambahkan ref untuk marker yang sedang aktif
@@ -63,9 +64,9 @@ export default function Map({
     Object.values(layersRef.current).flat().forEach(l => {
       try { mapObj.current.removeLayer(l) } catch(e) {}
     })
-    layersRef.current = { bfs: [], astar: [], hc: [], markers: [] }
+    layersRef.current = { bfs: [], astar: [], bruteforce: [], greedy: [], markers: [] }
 
-    const algos = ['bfs', 'astar', 'hc']
+    const algos = ['bfs', 'astar', 'bruteforce', 'greedy']
 
     algos.forEach(key => {
       const res = results[key]
@@ -107,28 +108,7 @@ export default function Map({
         layersRef.current[key].push(line)
       }
 
-      // Titik terjebak Hill Climbing
-      if (key === 'hc' && res.stuckNode && (!activeAlgo || isActive)) {
-        const n = graph.nodes[res.stuckNode]
-        if (n) {
-          const stuck = L.circleMarker([n.lat, n.lng], {
-            radius: 10,
-            color: '#DB4437',
-            fillColor: '#DB4437',
-            fillOpacity: 0.3,
-            weight: 2,
-            dashArray: '4'
-          }).addTo(mapObj.current)
-
-          stuck.bindTooltip('⚠ Hill Climbing terjebak di sini', {
-            permanent: isActive,
-            className: 'stuck-tooltip',
-            direction: 'top'
-          })
-
-          layersRef.current[key].push(stuck)
-        }
-      }
+      // Tidak ada stuck marker untuk Brute Force / Greedy
     })
 
     // Marker start & goal
@@ -180,8 +160,7 @@ export default function Map({
     const n = graph.nodes[activeStep.current]
     if (!n) return
 
-    const color = activeAlgo === 'bfs' ? '#1A73E8' :
-                  activeAlgo === 'astar' ? '#0F9D58' : '#F4B400'
+    const color = COLORS[activeAlgo] || '#5B5FEF'
 
     // Lingkaran besar berkedip di node aktif
     const marker = L.circleMarker([n.lat, n.lng], {
@@ -217,8 +196,7 @@ export default function Map({
     const res  = results[algo]
     if (!res?.steps) return
 
-    const color = algo === 'bfs' ? '#1A73E8' :
-                  algo === 'astar' ? '#0F9D58' : '#F4B400'
+    const color = COLORS[algo] || '#5B5FEF'
 
     // Hitung frekuensi kunjungan tiap node
     const freq = {}
@@ -288,9 +266,10 @@ export default function Map({
           </p>
           <div className="space-y-1.5">
             {[
-              { color: '#1A73E8', label: 'BFS', sub: 'Uninformed' },
-              { color: '#0F9D58', label: 'A*',  sub: 'Informed'   },
-              { color: '#F4B400', label: 'Hill Climbing', sub: 'Local Search' },
+              { color: '#5B5FEF', label: 'BFS',         sub: 'Uninformed'  },
+              { color: '#10B981', label: 'A*',           sub: 'Informed'    },
+              { color: '#EF4444', label: 'Brute Force',  sub: 'Exhaustive'  },
+              { color: '#EC4899', label: 'Greedy',       sub: 'Best-First'  },
             ].map(({ color, label, sub }) => (
               <div key={label} className="flex items-center gap-2">
                 <div className="w-6 h-1.5 rounded-full shrink-0" style={{ background: color }} />

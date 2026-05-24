@@ -10,7 +10,7 @@ import {
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { loadGraph } from '../../utils/graph'
-import { runBFS, runAStar, runHillClimbing } from '../../hooks/useAlgorithm'
+import { runBFS, runAStar, runBruteForce, runGreedy } from '../../hooks/useAlgorithm'
 import { useAppStore } from '../../stores/useAppStore'
 import SharedSidebar from '../../components/SharedSidebar'
 
@@ -103,9 +103,10 @@ const SkylineIllustration = () => (
 // SIDEBAR diganti SharedSidebar
 
 const ALGO_COLORS = {
-  bfs: { color: '#5B5FEF', bg: '#EEF2FF', label: 'BFS', sub: 'Uninformed' },
-  astar: { color: '#10B981', bg: '#F0FDF4', label: 'A*', sub: 'Informed' },
-  hc: { color: '#F59E0B', bg: '#FFFBEB', label: 'Hill Climbing', sub: 'Local' },
+  bfs:        { color: '#5B5FEF', bg: '#EEF2FF', label: 'BFS',         sub: 'Uninformed' },
+  astar:      { color: '#10B981', bg: '#F0FDF4', label: 'A*',           sub: 'Informed'   },
+  bruteforce: { color: '#EF4444', bg: '#FEF2F2', label: 'Brute Force',  sub: 'Exhaustive' },
+  greedy:     { color: '#EC4899', bg: '#FDF2F8', label: 'Greedy',       sub: 'Best-First' },
 }
 
 const ITEMS_PER_PAGE = 5
@@ -151,8 +152,10 @@ function MiniMapPreview({ startNodeId, goalNodeId, graph, algoColor = '#5B5FEF',
     try {
       if (bestAlgo === 'bfs') {
         result = runBFS(graph.nodes, graph.adj, startNodeId, goalNodeId)
-      } else if (bestAlgo === 'hc') {
-        result = runHillClimbing(graph.nodes, graph.adj, startNodeId, goalNodeId)
+      } else if (bestAlgo === 'bruteforce') {
+        result = runBruteForce(graph.nodes, graph.adj, startNodeId, goalNodeId)
+      } else if (bestAlgo === 'greedy') {
+        result = runGreedy(graph.nodes, graph.adj, startNodeId, goalNodeId)
       } else {
         result = runAStar(graph.nodes, graph.adj, startNodeId, goalNodeId)
       }
@@ -249,7 +252,7 @@ function RiwayatCard({ item, onLihatRute, onHapus, index, graph }) {
 
   const algoKey = item.bestAlgo || 'astar'
   const algoInfo = ALGO_COLORS[algoKey] || ALGO_COLORS.astar
-  const isStuck = algoKey === 'hc' && item.stuckNode
+  // Tidak ada isStuck badge (Hill Climbing sudah dihapus)
 
   return (
     <motion.div
@@ -300,8 +303,8 @@ function RiwayatCard({ item, onLihatRute, onHapus, index, graph }) {
           }}>
             {algoInfo.label}
           </span>
-          {isStuck && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 20, background: '#FEE2E2', color: '#DC2626', fontWeight: 600 }}>Local Optima</span>}
-          {!isStuck && item.bestCost && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 20, background: '#D1FAE5', color: '#065F46', fontWeight: 700 }}>Terbaik</span>}
+          {/* Tidak ada Local Optima badge (Hill Climbing sudah dihapus) */}
+          {item.bestCost && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 20, background: '#D1FAE5', color: '#065F46', fontWeight: 700 }}>Terbaik</span>}
         </div>
 
         <div style={{ display: 'flex', gap: 16 }}>

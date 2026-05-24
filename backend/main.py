@@ -77,10 +77,15 @@ PERSONA = {
         "sifat": "percaya diri, analitis, dan selalu punya alasan di balik setiap keputusan. Kamu efisien dan tidak suka buang waktu.",
         "gaya": "seperti navigator berpengalaman yang menggabungkan insting dan logika",
     },
-    "hc": {
-        "desc": "Hill Climbing — algoritma yang optimis dan selalu bergerak menuju jalan yang terasa paling dekat",
-        "sifat": "antusias, terkadang impulsif, dan bisa sangat frustrasi saat nyasar. Kamu jujur soal kegagalanmu.",
-        "gaya": "seperti orang yang terburu-buru dan percaya nalurinya, kadang menyesal",
+    "bruteforce": {
+        "desc": "Brute Force — algoritma yang tidak kenal kompromi dan memeriksa SETIAP kemungkinan tanpa terkecuali",
+        "sifat": "tegas, sedikit sombong soal ketepatan, tapi mengakui kelambatanmu dengan santai. Kamu lambat, sangat lambat, tapi hasilnya pasti 100% optimal. Kamu bangga karena tidak pernah melewatkan satu pun kemungkinan.",
+        "gaya": "seperti pemeriksa forensik yang pantang menyerah dan selalu ingin memastikan tidak ada yang terlewat",
+    },
+    "greedy": {
+        "desc": "Greedy Best-First Search — algoritma yang selalu mengejar yang tampak paling dekat ke tujuan saat ini",
+        "sifat": "optimis, energetik, dan sedikit ceroboh. Kamu sangat cepat dan penuh percaya diri, tapi kadang kamu mengambil jalan yang tidak efisien karena tidak memperhitungkan jarak yang sudah ditempuh.",
+        "gaya": "seperti pelari sprint yang langsung tancap gas tanpa terlalu banyak mikir",
     },
 }
 
@@ -105,19 +110,35 @@ def build_geographic_prompt(req: NarasiRequest) -> str:
 
     if req.found:
         outcome = f"berhasil menemukan jalur dari {req.start_landmark} menuju {req.goal_landmark}"
-        emotion = (
-            "Ungkapkan rasa lega, bangga, dan syukur yang tulus karena berhasil. "
-            "Boleh sedikit dramatis seperti orang yang baru selesai petualangan panjang."
-        )
+        if req.algo == "bruteforce":
+            emotion = (
+                f"Kamu BERHASIL menemukan jalur TERPENDEK ABSOLUT sepanjang {req.cost}m setelah memeriksa {req.expanded} node dengan metode exhaustive. "
+                "Ungkapkan rasa puas dan bangga yang tulus karena hasilmu pasti 100% optimal."
+            )
+        elif req.algo == "greedy":
+            emotion = (
+                f"Kamu BERHASIL menemukan jalur sepanjang {req.cost}m dengan cepat setelah hanya memeriksa {req.expanded} node, meski jalurnya mungkin bukan yang terpendek. "
+                "Ungkapkan rasa senang dan optimis, boleh sedikit bangga dengan kecepatan."
+            )
+        else:
+            emotion = (
+                "Ungkapkan rasa lega, bangga, dan syukur yang tulus karena berhasil. "
+                "Boleh sedikit dramatis seperti orang yang baru selesai petualangan panjang."
+            )
     elif req.stuck_node:
         outcome = f"terjebak dan gagal menemukan jalur dari {req.start_landmark} ke {req.goal_landmark}"
         emotion = (
-            "Ungkapkan rasa frustrasi, kekecewaan mendalam, dan sedikit humor pahit karena terjebak "
-            "di local optima. Ceritakan betapa menjengkelkannya terjebak padahal sudah usaha keras."
+            "Ungkapkan rasa frustrasi, kekecewaan mendalam, dan sedikit humor pahit karena terjebak. "
+            "Ceritakan betapa menjengkelkannya terjebak padahal sudah usaha keras."
         )
     else:
         outcome = f"tidak berhasil menemukan jalur dari {req.start_landmark} ke {req.goal_landmark}"
-        emotion = "Ungkapkan kebingungan dan rasa lelah yang jujur."
+        if req.algo == "bruteforce":
+            emotion = f"Kamu tidak berhasil menemukan jalur setelah memeriksa {req.expanded} node. Ungkapkan kebingungan yang jujur."
+        elif req.algo == "greedy":
+            emotion = f"Kamu gagal menemukan jalur setelah {req.expanded} node. Ungkapkan kekecewaan energetik."
+        else:
+            emotion = "Ungkapkan kebingungan dan rasa lelah yang jujur."
 
     return f"""Kamu adalah {p['desc']}.
 Kepribadianmu: {p['sifat']}
@@ -144,13 +165,23 @@ def build_prompt(req: NarasiRequest) -> str:
 
     if req.found:
         outcome = f"berhasil menemukan jalur dari {req.start_landmark} menuju {req.goal_landmark}"
-        emotion = "Ungkapkan rasa lega dan bangga yang tulus. Boleh sedikit dramatis."
+        if req.algo == "bruteforce":
+            emotion = f"Kamu BERHASIL menemukan jalur TERPENDEK ABSOLUT sepanjang {req.cost}m setelah memeriksa {req.expanded} node dengan metode exhaustive. Ungkapkan rasa puas dan bangga yang tulus."
+        elif req.algo == "greedy":
+            emotion = f"Kamu BERHASIL menemukan jalur sepanjang {req.cost}m dengan cepat setelah hanya memeriksa {req.expanded} node. Ungkapkan rasa senang dan optimis."
+        else:
+            emotion = "Ungkapkan rasa lega dan bangga yang tulus. Boleh sedikit dramatis."
     elif req.stuck_node:
         outcome = f"terjebak dan gagal menemukan jalur dari {req.start_landmark} ke {req.goal_landmark}"
         emotion = "Ungkapkan frustrasi dan humor pahit karena terjebak di local optima."
     else:
         outcome = f"tidak berhasil menemukan jalur dari {req.start_landmark} ke {req.goal_landmark}"
-        emotion = "Ungkapkan kebingungan dan rasa lelah yang jujur."
+        if req.algo == "bruteforce":
+            emotion = f"Kamu tidak berhasil menemukan jalur setelah memeriksa {req.expanded} node. Ungkapkan kebingungan jujur."
+        elif req.algo == "greedy":
+            emotion = f"Kamu gagal menemukan jalur setelah {req.expanded} node. Ungkapkan kekecewaan."
+        else:
+            emotion = "Ungkapkan kebingungan dan rasa lelah yang jujur."
 
     return f"""Kamu adalah {p['desc']}.
 Kepribadianmu: {p['sifat']}
@@ -228,7 +259,8 @@ async def generate_narasi_step(req: NarasiStepRequest):
         personality = {
             "BFS": "teliti dan sabar, selalu menyebar ke semua arah",
             "ASTAR": "cerdas dan intuitif, percaya pada insting terbaik",
-            "HC": "optimis dan impulsif, selalu ambil langkah paling dekat ke tujuan",
+            "BRUTEFORCE": "tegas dan pasti, memeriksa semua kemungkinan tanpa terkecuali",
+            "GREEDY": "optimis dan energetik, selalu mengejar yang tampak paling dekat ke tujuan",
         }.get(algo_name, "penuh rasa ingin tahu")
 
         loc_list = req.locations
